@@ -134,11 +134,12 @@ def scan_stocks():
             # --- Strategy B: Inside Camarilla ---
             # "Recent camerilla should be within the previous Camerilla"
             # Today's Range (H3-L3) inside Yesterday's Range (H3-L3)
-            # i.e. Today H3 < Yesterday H3  AND  Today L3 > Yesterday L3
+            # User request: "including the above criteria" -> Price >= Pivot, Range < 1%
             
             is_inside_cam = (cam_today['h3'] < cam_yesterday['h3']) and (cam_today['l3'] > cam_yesterday['l3'])
             
-            if is_inside_cam:
+            # Applying bullish filters to Inside Cam as well
+            if is_inside_cam and is_above_pivot and is_low_range:
                 strategies.append("Inside_Camarilla")
 
             # --- 3. Add to List if any strategy matches ---
