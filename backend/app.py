@@ -110,7 +110,7 @@ if st.session_state.scan_data:
                 
         elif scanner_mode == "Inside Camarilla (Monthly)":
             st.subheader("📉 Monthly Inside Camarilla Setups")
-            st.caption("Criteria: Inside Month (Curr H3/L3 inside Prev) + Narrow CPR (<0.2%).")
+            st.caption("Criteria: Inside Month (Curr H3/H4/L3/L4 inside Prev).")
             df_inside = create_df("Inside_Camarilla")
             
             if df_inside.empty:

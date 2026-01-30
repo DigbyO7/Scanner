@@ -30,7 +30,8 @@ def calculate_camarilla_value(high, low, close):
     l3 = close - (r * 1.1) / 4
     h4 = close + (r * 1.1) / 2
     l4 = close - (r * 1.1) / 2
-    pp = (high + low + close) / 3
+    # Pine Script: center = sclose
+    pp = close 
     return {
         'h3': round(h3, 2),
         'l3': round(l3, 2),
@@ -95,7 +96,7 @@ def scan_stocks():
             
             # --- 2. Calculate Monthly Indicators (for Inside Cam Strategy) ---
             # Resample to Monthly
-            # yfinance index is DatetimeIndex. Resample 'M' gives last day of month.
+            # yfinance index is DatetimeIndex. Resample 'ME' gives last day of month.
             try:
                 df_monthly = df.resample('ME').agg({
                     'Open': 'first',
@@ -103,14 +104,6 @@ def scan_stocks():
                     'Low': 'min',
                     'Close': 'last'
                 })
-                # If current month is incomplete, it might be included or not depending on date.
-                # We need Completed Months for "Prev Month" and "Month before Prev".
-                
-                # Check if the last row is the current incomplete month. 
-                # If today is Jan 30, 'ME' for Jan is Jan 31. It will verify as "Jan".
-                # We treat the last row as "Current Month" (even if incomplete/live).
-                # The row before that is "Last Month" (Completed).
-                # The row before that is "Month before Last" (Completed).
                 
                 if len(df_monthly) < 3: continue
                 
@@ -157,26 +150,14 @@ def scan_stocks():
             if is_tight_cpr and is_near_center and has_pattern and is_above_pivot_daily and is_near_ema:
                 strategies.append("Doji_Setup")
 
-            # --- Strategy B: Monthly Inside Camarilla (Chartink Logic) ---
-            # Logic from screenshot:
-            # 1. H3/L3 Comparison:
-            #    (2 months ago data -> Prev Month Pivots) outer range
-            #    (1 month ago data -> Curr Month Pivots) inner range
-            #    Curr H3 <= Prev H3  AND  Curr L3 >= Prev L3
+            # --- Strategy B: Monthly Inside Camarilla (Pine Script Alignment) ---
+            # Requirement: Recent month Camerilla (L3 L4 H3 H4) should be within Last month (L3 L4 H3 H4)
+            # Replaced CPR check with Strict Containment as per User Instruction referring to calculation.
             
             is_inside_h3l3 = (cam_monthly_curr['h3'] <= cam_monthly_prev['h3']) and (cam_monthly_curr['l3'] >= cam_monthly_prev['l3'])
+            is_inside_h4l4 = (cam_monthly_curr['h4'] <= cam_monthly_prev['h4']) and (cam_monthly_curr['l4'] >= cam_monthly_prev['l4'])
             
-            # 2. Narrow CPR Check
-            # Screenshot: Abs(TC - BC) < (Close * 0.002)
-            # which matches our cpr['width_pct'] < 0.2
-            is_narrow_cpr_monthly = cpr_monthly_curr['width_pct'] < 0.2
-            
-            # User asked to "follow logic from screenshot".
-            # The screenshot shows H3/L3 comparison and CPR Width Check.
-            # It does NOT explicitly show Price > Pivot or Daily Range < 1% filters in the visible conditional blocks.
-            # I will remove the extra daily filters for THIS strategy to be strict.
-            
-            if is_inside_h3l3 and is_narrow_cpr_monthly:
+            if is_inside_h3l3 and is_inside_h4l4:
                 strategies.append("Inside_Camarilla")
 
             # --- 4. Add to List ---
