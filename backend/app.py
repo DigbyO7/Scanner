@@ -6,7 +6,7 @@ import datetime
 st.set_page_config(page_title="Camarilla Stock Scanner", layout="wide")
 
 st.title("📈 Camarilla & CPR Stock Scanner")
-st.markdown("Identify swing trading setups with **Doji/Hammer** patterns near **Camarilla Central Pivots** and **Tight CPR**.")
+st.markdown("Identify swing trading setups with **Doji/Hammer** patterns and **Inside Camarilla** setups.")
 
 # Initialize session state for data
 if 'scan_data' not in st.session_state:
@@ -15,7 +15,7 @@ if 'last_updated' not in st.session_state:
     st.session_state.last_updated = "Never"
 
 def run_scan():
-    with st.spinner('Scanning Nifty 500 stocks... This may take a minute.'):
+    with st.spinner('Scanning Nifty Total/500 stocks... This may take a minute.'):
         try:
             result = scan.scan_stocks()
             if result and 'stocks' in result:
@@ -40,56 +40,84 @@ if st.session_state.scan_data:
     stocks = st.session_state.scan_data
     
     if len(stocks) == 0:
-        st.warning("No stocks matched the criteria today.")
+        st.warning("No stocks matched any criteria today.")
     else:
-        # Prepare DataFrame for display
-        display_data = []
-        for s in stocks:
-            tv_url = f"https://in.tradingview.com/chart/?symbol=NSE:{s['ticker']}"
-            display_data.append({
-                "Ticker": s['ticker'],
-                "Price": s['price'],
-                "Signal": s['signal'],
-                "CPR Width %": s['cpr']['width_pct'],
-                "Cam Center": s['camarilla']['center'],
-                "EMA Status": s['ema_status'],
-                "Chart": tv_url
-            })
+        # Create Tabs
+        tab1, tab2 = st.tabs(["🕯️ Doji / CPR Setups", "📉 Inside Camarilla"])
         
-        df = pd.DataFrame(display_data)
-        
-        # summary metrics
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Stocks Found", len(stocks))
-        
-        st.subheader("Potential Setups")
-        st.dataframe(
-            df,
-            column_config={
-                "Price": st.column_config.NumberColumn(format="₹%.2f"),
-                "CPR Width %": st.column_config.NumberColumn(format="%.2f%%"),
-                "Cam Center": st.column_config.NumberColumn(format="₹%.2f"),
-                "Chart": st.column_config.LinkColumn("TradingView", display_text="Open Chart"),
-            },
-            use_container_width=True,
-            hide_index=True
-        )
-        
-        # Detailed Cards (Optional expansion)
-        with st.expander("View Detailed Breakdown"):
-            for s in stocks:
-                st.markdown(f"### {s['ticker']}")
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Price", f"₹{s['price']}")
-                c2.metric("Signal", s['signal'])
-                c3.metric("CPR Width", f"{s['cpr']['width_pct']}%")
+        # --- Helper to create DF ---
+        def create_df(strategy_name):
+            filtered = [s for s in stocks if strategy_name in s.get('strategies', [])]
+            if not filtered: return pd.DataFrame()
+            
+            data = []
+            for s in filtered:
+                tv_url = f"https://in.tradingview.com/chart/?symbol=NSE:{s['ticker']}"
+                row = {
+                    "Ticker": s['ticker'],
+                    "Price": s['price'],
+                    "Range %": s.get('range_pct', 0),
+                    "Chart": tv_url
+                }
                 
-                st.markdown(f"**Technical Levels:**")
-                st.code(f"""
-CPR: Pivot={s['cpr']['pivot']}, TC={s['cpr']['tc']}, BC={s['cpr']['bc']}
-Camarilla: H3={s['camarilla']['h3']}, L3={s['camarilla']['l3']}, Center={s['camarilla']['center']}
-                """)
-                st.divider()
+                if strategy_name == "Doji_Setup":
+                    row.update({
+                        "Signal": "Doji/CPR",
+                        "CPR Width %": s['cpr']['width_pct'],
+                        "Cam Center": s['camarilla']['center'],
+                        "Pivot": s['cpr']['pivot']
+                    })
+                elif strategy_name == "Inside_Camarilla":
+                    row.update({
+                        "Signal": "Inside Cam",
+                        "Today H3": s['camarilla']['h3'],
+                        "Pre H3": s['prev_camarilla']['h3'],
+                        "Today L3": s['camarilla']['l3'],
+                        "Pre L3": s['prev_camarilla']['l3']
+                    })
+                data.append(row)
+            return pd.DataFrame(data)
+
+        # --- Tab 1: Doji ---
+        with tab1:
+            st.markdown("### Doji & Tight CPR Setups")
+            st.caption("Criteria: Price > Pivot, Range < 1%, Tight CPR, Near Cam Center.")
+            df_doji = create_df("Doji_Setup")
+            
+            if df_doji.empty:
+                st.info("No stocks matched the Doji setup criteria.")
+            else:
+                st.dataframe(
+                    df_doji,
+                    column_config={
+                        "Price": st.column_config.NumberColumn(format="₹%.2f"),
+                        "Range %": st.column_config.NumberColumn(format="%.2f%%"),
+                        "CPR Width %": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Chart": st.column_config.LinkColumn("TradingView", display_text="Open Chart"),
+                    },
+                    use_container_width=True,
+                    hide_index=True
+                )
+                
+        # --- Tab 2: Inside Camarilla ---
+        with tab2:
+            st.markdown("### Inside Camarilla Setups")
+            st.caption("Criteria: Today's Camarilla Range (H3-L3) is completely inside Yesterday's Range.")
+            df_inside = create_df("Inside_Camarilla")
+            
+            if df_inside.empty:
+                st.info("No stocks matched the Inside Camarilla criteria.")
+            else:
+                st.dataframe(
+                    df_inside,
+                    column_config={
+                        "Price": st.column_config.NumberColumn(format="₹%.2f"),
+                        "Range %": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Chart": st.column_config.LinkColumn("TradingView", display_text="Open Chart"),
+                    },
+                    use_container_width=True,
+                    hide_index=True
+                )
 
 else:
     st.info("Click 'Run Daily Scan' to start searching for potential trades.")

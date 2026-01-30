@@ -9,79 +9,28 @@ from tickers import get_nifty500_tickers
 
 # Configuration
 OUTPUT_FILE = "../frontend/public/data.json"
-DAYS_BACK = 60  # Fetch enough data for EMAs
-CAMARILLA_DOJI_THRESHOLD = 0.05  # 0.05% proximity to Central Pivot
-CPR_WIDTH_THRESHOLD = 0.5  # Arbitrary threshold for "Tight", can be adjusted
+DAYS_BACK = 60
+CAMARILLA_DOJI_THRESHOLD = 0.05
+CPR_WIDTH_THRESHOLD = 0.5
 
-def calculate_cpr(df):
-    """
-    Calculates Central Pivot Range (CPR) for the next day based on current day's OHLC.
-    Returns pivot, bc, tc.
-    """
-    # Using the last completed day (which is 'today' if market is closed, or yesterday)
-    # yfinance 'history' returns the last row as the most recent data
-    
-    # We need to calculate pivots based on the *previous* day to trade *today*?
-    # Or calculate for *tomorrow* based on *today*?
-    # The user asks for "Near Camarilla's Central pivot". Usually this means price IS near the pivot.
-    # Pivots are calculated from previous day's High, Low, Close.
-    # So for Today's price action, we use Yesterday's HLC.
-    
-    # Let's take the last row as "Today" (current price) and the second last row as "Yesterday" (for pivots).
-    # If the market is closed, the last row is the completed day.
-    # If market is LIVE, the last row is continuously updating.
-    # Ideally, run this after market close (as per "Updates daily at 6 PM").
-    
-    # So: Last row = Today (Signal Candle). calculate pivots from Second Last Row.
-    
-    if len(df) < 2:
-        return None
-        
-    prev_day = df.iloc[-2] # The completed day before today
-    today = df.iloc[-1]    # The current day being scanned (could be completed or live)
-    
-    high = prev_day['High']
-    low = prev_day['Low']
-    close = prev_day['Close']
-    
+def calculate_cpr_value(high, low, close):
     pivot = (high + low + close) / 3
     bc = (high + low) / 2
     tc = (pivot - bc) + pivot
-    
-    cpr = {
+    return {
         'pivot': round(pivot, 2),
         'bc': round(bc, 2),
         'tc': round(tc, 2),
         'width_pct': round(abs(tc - bc) / pivot * 100, 2)
     }
-    return cpr
 
-def calculate_camarilla(df):
-    """
-    Calculates Camarilla Pivots (H3, L3, H4, L4) based on previous day.
-    """
-    if len(df) < 2:
-        return None
-        
-    prev_day = df.iloc[-2]
-    high = prev_day['High']
-    low = prev_day['Low']
-    close = prev_day['Close']
+def calculate_camarilla_value(high, low, close):
     r = high - low
-    
     h3 = close + (r * 1.1) / 4
     l3 = close - (r * 1.1) / 4
     h4 = close + (r * 1.1) / 2
     l4 = close - (r * 1.1) / 2
-    
-    # Central pivot for Camarilla typically refers to the area between H3 and L3 or simply the Pivot Point
-    # Some users check "Camarilla Pivot" as (H+L+C)/3 similar to standard.
-    # But usually "Central Pivot" in context of "Doji near Central Pivot" implies the standard pivot or the middle of the range.
-    # Let's assume standard Pivot for "Central" reference or the midpoint of Camarilla.
-    # Actually, often CPR Pivot is used as the "Central Pivot".
-    # User said: "Camarilla's Central pivot". Camarilla indicators often have a 'PP'.
     pp = (high + low + close) / 3
-    
     return {
         'h3': round(h3, 2),
         'l3': round(l3, 2),
@@ -90,41 +39,18 @@ def calculate_camarilla(df):
         'center': round(pp, 2)
     }
 
-def check_candle_pattern(df):
-    """
-    Checks for Doji or Hammer pattern on the last candle.
-    """
-    if len(df) < 1:
-        return False, "None"
-        
-    candle = df.iloc[-1]
-    open_p = candle['Open']
-    close_p = candle['Close']
-    high_p = candle['High']
-    low_p = candle['Low']
-    
+def check_candle_pattern(open_p, high_p, low_p, close_p):
     body = abs(close_p - open_p)
     total_range = high_p - low_p
+    if total_range == 0: return False, "None"
     
-    if total_range == 0:
-        return False, "None"
-        
-    # Doji definition: Body is very small relative to range
-    is_doji = body <= (total_range * 0.1) # 10% of range
-    
-    # Hammer definition: Small body at top, long lower wick
-    # (High - max(Open, Close)) is small upper wick
-    # (min(Open, Close) - Low) is long lower wick
+    is_doji = body <= (total_range * 0.1)
     upper_wick = high_p - max(open_p, close_p)
     lower_wick = min(open_p, close_p) - low_p
-    
     is_hammer = (lower_wick > 2 * body) and (upper_wick < body)
     
-    if is_doji:
-        return True, "Doji"
-    if is_hammer:
-        return True, "Hammer"
-        
+    if is_doji: return True, "Doji"
+    if is_hammer: return True, "Hammer"
     return False, "None"
 
 def scan_stocks():
@@ -132,120 +58,104 @@ def scan_stocks():
     tickers = get_nifty500_tickers()
     valid_stocks = []
     
-    # Batch processing or loop?
-    # Individual loop is safer for error handling but slower.
-    # yfinance download(tickers) is faster but complex to handle missing data for single ticker.
-    # Let's try bulk download for speed, then process.
-    
     print(f"Downloading data for {len(tickers)} tickers...")
-    
-    # Download last 60 days
     try:
-        data = yf.download(tickers, period="2mo", interval="1d", group_by='ticker', threads=True)
+        data = yf.download(tickers, period="3mo", interval="1d", group_by='ticker', threads=True)
     except Exception as e:
         print(f"Bulk download failed: {e}")
-        return {
-            "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "stocks": []
-        }
+        return {"stocks": []}
 
-    # If data is empty
     if data is None or data.empty:
-         print("No data received from Yahoo Finance.")
-         return {
-            "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "stocks": []
-        }
+         print("No data received.")
+         return {"stocks": []}
 
     print("Processing data...")
-    count = 0
     
     for ticker in tickers:
         try:
-            # Extract dataframe for this ticker
             if len(tickers) > 1:
                 df = data[ticker].copy()
             else:
-                df = data.copy() # Single ticker case
+                df = data.copy()
             
-            # Drop NaN
             df.dropna(inplace=True)
+            if len(df) < 5: continue
             
-            if len(df) < 20: # Need at least 20 for EMA
-                continue
-                
-            # Current price
-            current_price = df.iloc[-1]['Close']
+            # Data Points
+            # Row -1: Today (Live/Latest)
+            # Row -2: Yesterday (T-1) -> Used for Today's levels
+            # Row -3: Day Before (T-2) -> Used for Yesterday's levels
             
-            # 1. Indicators
+            today = df.iloc[-1]
+            prev_day = df.iloc[-2]  # T-1
+            prev_prev = df.iloc[-3] # T-2
+            
+            current_price = today['Close']
+            
+            # --- 1. Calculate Indicators ---
+            
+            # CPR & Camarilla for TODAY (Using T-1)
+            cpr_today = calculate_cpr_value(prev_day['High'], prev_day['Low'], prev_day['Close'])
+            cam_today = calculate_camarilla_value(prev_day['High'], prev_day['Low'], prev_day['Close'])
+            
+            # Camarilla for YESTERDAY (Using T-2) - For Inside Cam Strategy
+            cam_yesterday = calculate_camarilla_value(prev_prev['High'], prev_prev['Low'], prev_prev['Close'])
+            
             # EMAs
-            df['EMA8'] = ta.ema(df['Close'], length=8)
-            df['EMA20'] = ta.ema(df['Close'], length=20)
+            # Calculate on full series to be accurate
+            ema8 = ta.ema(df['Close'], length=8).iloc[-1]
+            ema20 = ta.ema(df['Close'], length=20).iloc[-1]
             
-            current_ema8 = df['EMA8'].iloc[-1]
-            current_ema20 = df['EMA20'].iloc[-1]
+            # --- 2. Strategy Logic ---
+            strategies = []
             
-            # Pivots (based on previous day)
-            cpr = calculate_cpr(df)
-            cam = calculate_camarilla(df)
+            # --- Strategy A: Doji/CPR Setup ---
+            # Criteria 1: Tight CPR
+            is_tight_cpr = cpr_today['width_pct'] < CPR_WIDTH_THRESHOLD
             
-            if not cpr or not cam:
-                continue
-                
-            # 2. Pattern Logic
-            has_pattern, pattern_name = check_candle_pattern(df)
+            # Criteria 2: Near Cam Center
+            dist_to_center = abs(current_price - cam_today['center']) / cam_today['center'] * 100
+            is_near_center = dist_to_center < 0.3
             
-            # Conditions
-            # A. Tight CPR
-            is_tight_cpr = cpr['width_pct'] < CPR_WIDTH_THRESHOLD
+            # Criteria 3: Candlestick Pattern (Reviewing last candle)
+            has_pattern, pattern_name = check_candle_pattern(today['Open'], today['High'], today['Low'], today['Close'])
             
-            # B. Doji/Pattern near Camarilla Central Pivot
-            # Check percent distance to Center Pivot
-            dist_to_center = abs(current_price - cam['center']) / cam['center'] * 100
-            is_near_center = dist_to_center < 0.2 # Within 0.2% range
+            # Criteria 4: Price Near/Above Pivot (Using CPR Pivot as reference)
+            # User: "near or above pivot"
+            is_above_pivot = current_price >= (cpr_today['pivot'] * 0.999) # 0.1% tolerance
             
-            # C. Proximity to EMA (Support)
-            # Price > EMA but close to it (e.g., within 1%)
-            dist_ema8 = (current_price - current_ema8) / current_ema8 * 100
-            dist_ema20 = (current_price - current_ema20) / current_ema20 * 100
+            # Criteria 5: Short Daily Range (< 1%)
+            today_range_pct = (today['High'] - today['Low']) / current_price * 100
+            is_low_range = today_range_pct < 1.0
             
-            # Logic: "Doji-like candles near Camarilla's Central pivot and tight CPR"
-            # AND "Proximity to 8-day or 20-day EMAs"
-            
-            condition_met = False
-            signal_desc = ""
-            
-            if is_tight_cpr and is_near_center and (has_pattern or is_near_center): 
-                # Relaxed: If near center and tight CPR, even without perfect doji, it's interesting. 
-                # But user asked for "Doji-like".
-                if has_pattern:
-                    condition_met = True
-                    signal_desc = f"{pattern_name} at Cam Center + Tight CPR"
-            
-            # Check EMA support as well? Or is that an alternative? 
-            # "and proximity to 8-day or 20-day EMAs" implied AND.
-            if condition_met:
-                 is_near_ema = (abs(dist_ema8) < 1.0) or (abs(dist_ema20) < 1.0)
-                 if is_near_ema:
-                     signal_desc += " + Near EMA"
-                 else:
-                     # If strict "AND", then continue. If loose, keep it.
-                     # Let's keep it but mark it.
-                     pass
+            if is_tight_cpr and is_near_center and has_pattern and is_above_pivot and is_low_range:
+                strategies.append("Doji_Setup")
 
-            if condition_met:
+            # --- Strategy B: Inside Camarilla ---
+            # "Recent camerilla should be within the previous Camerilla"
+            # Today's Range (H3-L3) inside Yesterday's Range (H3-L3)
+            # i.e. Today H3 < Yesterday H3  AND  Today L3 > Yesterday L3
+            
+            is_inside_cam = (cam_today['h3'] < cam_yesterday['h3']) and (cam_today['l3'] > cam_yesterday['l3'])
+            
+            if is_inside_cam:
+                strategies.append("Inside_Camarilla")
+
+            # --- 3. Add to List if any strategy matches ---
+            if strategies:
                 valid_stocks.append({
                     "ticker": ticker.replace(".NS", ""),
                     "price": round(current_price, 2),
-                    "cpr": cpr,
-                    "camarilla": cam,
-                    "signal": signal_desc,
-                    "ema_status": f"EMA8: {round(current_ema8,1)}, EMA20: {round(current_ema20,1)}"
+                    "cpr": cpr_today,
+                    "camarilla": cam_today,
+                    "prev_camarilla": cam_yesterday, # Useful for visualizing "Inside"
+                    "strategies": strategies,
+                    "signal": ", ".join(strategies), # For simple display
+                    "range_pct": round(today_range_pct, 2),
+                    "ema_status": f"EMA8: {round(ema8,1)}, EMA20: {round(ema20,1)}"
                 })
-                count += 1
-                
+
         except Exception as e:
-            # print(f"Error processing {ticker}: {e}")
             continue
             
     # Output
@@ -260,10 +170,9 @@ def scan_stocks():
             json.dump(result, f, indent=2)
         print(f"Data saved to {OUTPUT_FILE}")
     except Exception as e:
-        print(f"Warning: Could not save to file (likely read-only env): {e}")
+        print(f"Warning: Could not save to file: {e}")
         
     print(f"Scan complete. Found {len(valid_stocks)} stocks.")
-    
     return result
 
 if __name__ == "__main__":
