@@ -138,8 +138,18 @@ def scan_stocks():
                     strategies = []
                     today_range_pct = abs(today['High'] - today['Low']) / current_price * 100
                     
+                    # 0. Indicators (EMA)
+                    try:
+                        ema8 = df.ta.ema(length=8)
+                        ema20 = df.ta.ema(length=20)
+                        curr_ema8 = ema8.iloc[-1] if ema8 is not None else 0
+                        curr_ema20 = ema20.iloc[-1] if ema20 is not None else 0
+                    except:
+                        curr_ema8 = 0
+                        curr_ema20 = 0
+
                     # --- Strategy A: Daily Doji Logic (Pattern + Location) ---
-                    # User Request: "Doji near pivot range and near central camerilla. Range of doji should be low"
+                    # User Request: "Doji + Near Pivot + Near 8/20 EMA"
                     
                     # 1. Pattern Check
                     has_pattern, pattern_name = check_candle_pattern(today['Open'], today['High'], today['Low'], today['Close'])
@@ -151,22 +161,26 @@ def scan_stocks():
                             has_pattern = True
                             pattern_name = "Small Candle"
 
-                    # Explicitly Ignore Hammers if user wants "Short Wicks" (Hammer = Long Wick)
+                    # Explicitly Ignore Hammers (Short Wicks preference kept?)
+                    # User said "Today's candle should be a doji". I'll keep hammer exclusion as it implies strict doji/small.
                     if pattern_name == "Hammer":
                         has_pattern = False
 
-                    # 2. Location Checks (Near Pivot & Cam Center)
-                    # Threshold: 0.5% distance
+                    # 2. Location Check: Near Pivot (CPR)
                     dist_to_cpr = abs(current_price - cpr_daily['pivot']) / cpr_daily['pivot'] * 100
-                    dist_to_cam = abs(current_price - cam_daily['center']) / cam_daily['center'] * 100
-                    
                     is_near_cpr = dist_to_cpr < 0.5
-                    is_near_cam = dist_to_cam < 0.5
                     
-                    # 3. Low Range Check (Relaxed to 1.5% max)
-                    is_low_range = today_range_pct < 1.5 
+                    # 3. Location Check: Near EMA (8 or 20)
+                    # Threshold 1.0%
+                    dist_ema8 = abs(current_price - curr_ema8) / curr_ema8 * 100 if curr_ema8 > 0 else 999
+                    dist_ema20 = abs(current_price - curr_ema20) / curr_ema20 * 100 if curr_ema20 > 0 else 999
+                    is_near_ema = (dist_ema8 < 1.0) or (dist_ema20 < 1.0)
 
-                    if has_pattern and is_near_cpr and is_near_cam and is_low_range:
+                    # 4. Range Check (Optional but recommended to keep filtering junk)
+                    # User didn't specify, but implied previous "max 1.5%". I'll keep it loose.
+                    is_low_range = today_range_pct < 1.5
+
+                    if has_pattern and is_near_cpr and is_near_ema and is_low_range:
                         strategies.append("Doji_Setup")
 
                     # --- Strategy B: Monthly Inside Camarilla (Pine Script Alignment) ---
