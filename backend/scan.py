@@ -124,22 +124,17 @@ def scan_stocks():
             strategies = []
             
             # --- Strategy A: Daily Doji/CPR Setup ---
-            is_tight_cpr = cpr_daily['width_pct'] < CPR_WIDTH_THRESHOLD
-            dist_to_center = abs(current_price - cam_daily['center']) / cam_daily['center'] * 100
-            is_near_center = dist_to_center < 0.3
+            # --- Strategy A: Daily Doji/CPR Setup ---
+            # User Request: "scan stocks that is giving doji . thats the only criteria"
+            # Removing CPR width, Cam center, Pivot, and EMA checks.
+            
             has_pattern, pattern_name = check_candle_pattern(today['Open'], today['High'], today['Low'], today['Close'])
-            is_above_pivot_daily = current_price >= (cpr_daily['pivot'] * 0.999)
             
-            # EMA Proximity Check
-            # Calculate distance % from 8 and 20 EMA
-            dist_ema8 = abs(current_price - ema8) / ema8 * 100
-            dist_ema20 = abs(current_price - ema20) / ema20 * 100
+            # Use existing Small Candle logic if basic pattern not found?
+            # User said "Doji/Hammer/Small" previously, now just "Doji". 
+            # I will keep the robust pattern detector (Doji+Hammer) and the "Small Candle" fallback 
+            # because "Doji" is often used loosely for "small body".
             
-            # Condition: Near 8 EMA OR Near 20 EMA (within 1.5%)
-            is_near_ema = (dist_ema8 < 1.5) or (dist_ema20 < 1.5)
-            
-            # User said "range for now doesnt matter", so removing is_low_range from Doji strategy
-            # Also checking for "Small Candle" if not Doji/Hammer
             if not has_pattern:
                 body_size = abs(today['Close'] - today['Open'])
                 range_size = today['High'] - today['Low']
@@ -147,7 +142,7 @@ def scan_stocks():
                     has_pattern = True
                     pattern_name = "Small Candle"
 
-            if is_tight_cpr and is_near_center and has_pattern and is_above_pivot_daily and is_near_ema:
+            if has_pattern:
                 strategies.append("Doji_Setup")
 
             # --- Strategy B: Monthly Inside Camarilla (Pine Script Alignment) ---

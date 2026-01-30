@@ -88,8 +88,8 @@ if st.session_state.scan_data:
 
         # --- Mode Selection Logic ---
         if scanner_mode == "Doji / CPR (Daily)":
-            st.subheader("🕯️ Daily Doji & Tight CPR Setups")
-            st.caption("Criteria: Doji/Small Candle + Tight CPR + Near Cam Center + Near 8/20 EMA.")
+            st.subheader("🕯️ Daily Doji Setups")
+            st.caption("Criteria: Candlestick Pattern Only (Doji / Hammer / Small Candle).")
             df_doji = create_df("Doji_Setup")
             
             if df_doji.empty:
