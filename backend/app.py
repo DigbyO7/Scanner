@@ -21,6 +21,7 @@ def run_scan():
             if result and 'stocks' in result:
                 st.session_state.scan_data = result['stocks']
                 st.session_state.last_updated = result.get('last_updated', 'Just now')
+                st.session_state.total_scanned = result.get('total_scanned', 0)
                 st.success(f"Scan Complete! Found {len(result['stocks'])} stocks.")
             else:
                  st.error("Scan returned no data. Check logs or temporary API issues.")
@@ -41,6 +42,8 @@ if st.sidebar.button("Run Daily Scan", type="primary"):
 
 st.sidebar.markdown("---")
 st.sidebar.info(f"Last Updated: {st.session_state.last_updated}")
+if 'total_scanned' in st.session_state:
+    st.sidebar.text(f"Stocks Scanned: {st.session_state.total_scanned}")
 
 # Main Display
 if st.session_state.scan_data:

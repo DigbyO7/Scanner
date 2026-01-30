@@ -34,8 +34,11 @@ def get_nifty500_tickers():
         print("Using fallback list (Top 10 stocks).")
         # Fallback list of top NSE stocks
         return [
-            "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS",
-            "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "LICI.NS", "HINDUNILVR.NS"
+            "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "LICI.NS", "HINDUNILVR.NS",
+            "KOTAKBANK.NS", "LT.NS", "AXISBANK.NS", "HCLTECH.NS", "ASIANPAINT.NS", "MARUTI.NS", "SUNPHARMA.NS", "TITAN.NS", "BAJFINANCE.NS", "ULTRACEMCO.NS",
+            "ONGC.NS", "NTPC.NS", "TATAMOTORS.NS", "POWERGRID.NS", "ADANIENT.NS", "JSWSTEEL.NS", "TATASTEEL.NS", "M&M.NS", "COALINDIA.NS", "ADANIPORTS.NS",
+            "BAJAJFINSV.NS", "WIPRO.NS", "BPCL.NS", "NESTLEIND.NS", "TECHM.NS", "HINDALCO.NS", "GRASIM.NS", "CIPLA.NS", "EICHERMOT.NS", "SBI_LIFE.NS",
+            "DRREDDY.NS", "BRITANNIA.NS", "TATACONSUM.NS", "HEROMOTOCO.NS", "APOLLOHOSP.NS", "DIVISLAB.NS", "INDUSINDBK.NS", "BAJAJ-AUTO.NS", "UPL.NS"
         ]
 
 if __name__ == "__main__":

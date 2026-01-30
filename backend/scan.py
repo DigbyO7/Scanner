@@ -186,6 +186,7 @@ def scan_stocks():
     # Output
     result = {
         "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "total_scanned": len(tickers),
         "stocks": valid_stocks
     }
     
@@ -197,7 +198,7 @@ def scan_stocks():
     except Exception as e:
         print(f"Warning: Could not save to file: {e}")
         
-    print(f"Scan complete. Found {len(valid_stocks)} stocks.")
+    print(f"Scan complete. Scanned {len(tickers)}. Found {len(valid_stocks)} stocks.")
     return result
 
 if __name__ == "__main__":
