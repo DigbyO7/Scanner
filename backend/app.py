@@ -90,8 +90,8 @@ if st.session_state.scan_data:
             return pd.DataFrame(data)
 
         if scanner_mode == "Doji / CPR (Daily)":
-            st.subheader("🕯️ Daily Doji & CPR Setups")
-            st.caption("Criteria: Doji/Small Pattern + Near Pivot/Cam (0.5%) + Low Range (<1%).")
+            st.subheader("🕯️ Daily Doji & CPR Setups (Compact)")
+            st.caption("Criteria: Doji/Small Pattern (Short Wicks) + Near Pivot/Cam + Low Range (<0.75%).")
             df_doji = create_df("Doji_Setup")
             
             if df_doji.empty:

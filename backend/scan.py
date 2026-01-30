@@ -144,13 +144,16 @@ def scan_stocks():
                     # 1. Pattern Check
                     has_pattern, pattern_name = check_candle_pattern(today['Open'], today['High'], today['Low'], today['Close'])
                     
-                    # Fallback for "Small Candle"
                     if not has_pattern:
                         body_size = abs(today['Close'] - today['Open'])
                         range_size = today['High'] - today['Low']
                         if range_size > 0 and (body_size / range_size) < 0.3:
                             has_pattern = True
                             pattern_name = "Small Candle"
+
+                    # Explicitly Ignore Hammers if user wants "Short Wicks" (Hammer = Long Wick)
+                    if pattern_name == "Hammer":
+                        has_pattern = False
 
                     # 2. Location Checks (Near Pivot & Cam Center)
                     # Threshold: 0.5% distance
@@ -160,8 +163,8 @@ def scan_stocks():
                     is_near_cpr = dist_to_cpr < 0.5
                     is_near_cam = dist_to_cam < 0.5
                     
-                    # 3. Low Range Check
-                    is_low_range = today_range_pct < 1.0 # Strict low volatility
+                    # 3. Low Range Check (Tightened for "Short Wicks")
+                    is_low_range = today_range_pct < 0.75 
 
                     if has_pattern and is_near_cpr and is_near_cam and is_low_range:
                         strategies.append("Doji_Setup")
