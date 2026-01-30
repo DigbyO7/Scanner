@@ -3,6 +3,5 @@ pandas
 pandas_ta
 numpy
 requests
-streamlit
+streamlit>=1.40.0
 lxml
-altair<5
