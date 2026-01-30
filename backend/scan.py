@@ -138,21 +138,32 @@ def scan_stocks():
                     strategies = []
                     today_range_pct = abs(today['High'] - today['Low']) / current_price * 100
                     
-                    # --- Strategy A: Daily Doji Logic (Pattern Only) ---
-                    # User Request: "scan stocks that is giving doji . thats the only criteria"
-                    # Removing CPR width, Cam center, Pivot, and EMA checks.
+                    # --- Strategy A: Daily Doji Logic (Pattern + Location) ---
+                    # User Request: "Doji near pivot range and near central camerilla. Range of doji should be low"
                     
+                    # 1. Pattern Check
                     has_pattern, pattern_name = check_candle_pattern(today['Open'], today['High'], today['Low'], today['Close'])
                     
-                    # Use existing Small Candle logic if basic pattern not found
+                    # Fallback for "Small Candle"
                     if not has_pattern:
                         body_size = abs(today['Close'] - today['Open'])
                         range_size = today['High'] - today['Low']
-                        if range_size > 0 and (body_size / range_size) < 0.3: # Body less than 30% of range
+                        if range_size > 0 and (body_size / range_size) < 0.3:
                             has_pattern = True
                             pattern_name = "Small Candle"
 
-                    if has_pattern:
+                    # 2. Location Checks (Near Pivot & Cam Center)
+                    # Threshold: 0.5% distance
+                    dist_to_cpr = abs(current_price - cpr_daily['pivot']) / cpr_daily['pivot'] * 100
+                    dist_to_cam = abs(current_price - cam_daily['center']) / cam_daily['center'] * 100
+                    
+                    is_near_cpr = dist_to_cpr < 0.5
+                    is_near_cam = dist_to_cam < 0.5
+                    
+                    # 3. Low Range Check
+                    is_low_range = today_range_pct < 1.0 # Strict low volatility
+
+                    if has_pattern and is_near_cpr and is_near_cam and is_low_range:
                         strategies.append("Doji_Setup")
 
                     # --- Strategy B: Monthly Inside Camarilla (Pine Script Alignment) ---
