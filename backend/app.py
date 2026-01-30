@@ -18,9 +18,12 @@ def run_scan():
     with st.spinner('Scanning Nifty 500 stocks... This may take a minute.'):
         try:
             result = scan.scan_stocks()
-            st.session_state.scan_data = result['stocks']
-            st.session_state.last_updated = result['last_updated']
-            st.success(f"Scan Complete! Found {len(result['stocks'])} stocks.")
+            if result and 'stocks' in result:
+                st.session_state.scan_data = result['stocks']
+                st.session_state.last_updated = result.get('last_updated', 'Just now')
+                st.success(f"Scan Complete! Found {len(result['stocks'])} stocks.")
+            else:
+                 st.error("Scan returned no data. Check logs or temporary API issues.")
         except Exception as e:
             st.error(f"Error during scan: {e}")
 

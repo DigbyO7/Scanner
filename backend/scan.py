@@ -143,12 +143,20 @@ def scan_stocks():
     try:
         data = yf.download(tickers, period="2mo", interval="1d", group_by='ticker', threads=True)
     except Exception as e:
-        print(f"Bulk download failed: {e}. Trying sequential (slow) fallback or smaller batch not implemented.")
-        return
+        print(f"Bulk download failed: {e}")
+        return {
+            "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "stocks": []
+        }
 
-    # If only one ticker, shape is different. Handle that?
-    # yf.download with multiple tickers returns MultiIndex columns.
-    
+    # If data is empty
+    if data is None or data.empty:
+         print("No data received from Yahoo Finance.")
+         return {
+            "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "stocks": []
+        }
+
     print("Processing data...")
     count = 0
     
@@ -246,11 +254,15 @@ def scan_stocks():
         "stocks": valid_stocks
     }
     
-    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
-    with open(OUTPUT_FILE, 'w') as f:
-        json.dump(result, f, indent=2)
+    try:
+        os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+        with open(OUTPUT_FILE, 'w') as f:
+            json.dump(result, f, indent=2)
+        print(f"Data saved to {OUTPUT_FILE}")
+    except Exception as e:
+        print(f"Warning: Could not save to file (likely read-only env): {e}")
         
-    print(f"Scan complete. Found {len(valid_stocks)} stocks. Data saved to {OUTPUT_FILE}")
+    print(f"Scan complete. Found {len(valid_stocks)} stocks.")
     
     return result
 
