@@ -29,6 +29,13 @@ def run_scan():
 
 # Sidebar controls
 st.sidebar.header("Scanner Controls")
+
+# Scanner Selection
+scanner_mode = st.sidebar.radio(
+    "Select Scanner Mode:",
+    ("Doji / CPR (Daily)", "Inside Camarilla (Monthly)")
+)
+
 if st.sidebar.button("Run Daily Scan", type="primary"):
     run_scan()
 
@@ -42,9 +49,6 @@ if st.session_state.scan_data:
     if len(stocks) == 0:
         st.warning("No stocks matched any criteria today.")
     else:
-        # Create Tabs
-        tab1, tab2 = st.tabs(["🕯️ Doji / CPR Setups", "📉 Inside Camarilla"])
-        
         # --- Helper to create DF ---
         def create_df(strategy_name):
             filtered = [s for s in stocks if strategy_name in s.get('strategies', [])]
@@ -61,31 +65,35 @@ if st.session_state.scan_data:
                 }
                 
                 if strategy_name == "Doji_Setup":
+                    # Access 'daily' dict
+                    d = s.get('daily', {})
                     row.update({
                         "Signal": "Doji/CPR",
-                        "CPR Width %": s['cpr']['width_pct'],
-                        "Cam Center": s['camarilla']['center'],
-                        "Pivot": s['cpr']['pivot']
+                        "CPR Width %": d.get('cpr_width'),
+                        "Cam Center": d.get('cam_center'),
+                        "Pivot": d.get('pivot')
                     })
                 elif strategy_name == "Inside_Camarilla":
+                    # Access 'monthly' dict
+                    m = s.get('monthly', {})
                     row.update({
-                        "Signal": "Inside Cam",
-                        "Today H3": s['camarilla']['h3'],
-                        "Pre H3": s['prev_camarilla']['h3'],
-                        "Today L3": s['camarilla']['l3'],
-                        "Pre L3": s['prev_camarilla']['l3']
+                        "Signal": "Inside Monthly",
+                        "Cur Month H3": m.get('curr_h3'),
+                        "Pre Month H3": m.get('prev_h3'),
+                        "Cur Month L3": m.get('curr_l3'),
+                        "Pre Month L3": m.get('prev_l3')
                     })
                 data.append(row)
             return pd.DataFrame(data)
 
-        # --- Tab 1: Doji ---
-        with tab1:
-            st.markdown("### Doji & Tight CPR Setups")
-            st.caption("Criteria: Price > Pivot, Range < 1%, Tight CPR, Near Cam Center.")
+        # --- Mode Selection Logic ---
+        if scanner_mode == "Doji / CPR (Daily)":
+            st.subheader("🕯️ Daily Doji & Tight CPR Setups")
+            st.caption("Criteria: Price > Daily Pivot, Daily Range < 1%, Tight CPR, Near Cam Center.")
             df_doji = create_df("Doji_Setup")
             
             if df_doji.empty:
-                st.info("No stocks matched the Doji setup criteria.")
+                st.info("No stocks matched the Daily Doji setup criteria.")
             else:
                 st.dataframe(
                     df_doji,
@@ -93,26 +101,30 @@ if st.session_state.scan_data:
                         "Price": st.column_config.NumberColumn(format="₹%.2f"),
                         "Range %": st.column_config.NumberColumn(format="%.2f%%"),
                         "CPR Width %": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Cam Center": st.column_config.NumberColumn(format="₹%.2f"),
                         "Chart": st.column_config.LinkColumn("TradingView", display_text="Open Chart"),
                     },
                     use_container_width=True,
                     hide_index=True
                 )
                 
-        # --- Tab 2: Inside Camarilla ---
-        with tab2:
-            st.markdown("### Inside Camarilla Setups")
-            st.caption("Criteria: Today's Camarilla Range (H3-L3) is completely inside Yesterday's Range.")
+        elif scanner_mode == "Inside Camarilla (Monthly)":
+            st.subheader("📉 Monthly Inside Camarilla Setups")
+            st.caption("Criteria: Current Monthly Range (H3-L3) inside Last Month's Range. + Price > Monthly Pivot & Daily Range < 1%.")
             df_inside = create_df("Inside_Camarilla")
             
             if df_inside.empty:
-                st.info("No stocks matched the Inside Camarilla criteria.")
+                st.info("No stocks matched the Monthly Inside Camarilla criteria.")
             else:
                 st.dataframe(
                     df_inside,
                     column_config={
                         "Price": st.column_config.NumberColumn(format="₹%.2f"),
                         "Range %": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Cur Month H3": st.column_config.NumberColumn(format="₹%.2f"),
+                        "Pre Month H3": st.column_config.NumberColumn(format="₹%.2f"),
+                        "Cur Month L3": st.column_config.NumberColumn(format="₹%.2f"),
+                        "Pre Month L3": st.column_config.NumberColumn(format="₹%.2f"),
                         "Chart": st.column_config.LinkColumn("TradingView", display_text="Open Chart"),
                     },
                     use_container_width=True,

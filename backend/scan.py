@@ -60,7 +60,8 @@ def scan_stocks():
     
     print(f"Downloading data for {len(tickers)} tickers...")
     try:
-        data = yf.download(tickers, period="3mo", interval="1d", group_by='ticker', threads=True)
+        # Need enough data for monthly resampling (at least 3-4 months)
+        data = yf.download(tickers, period="6mo", interval="1d", group_by='ticker', threads=True)
     except Exception as e:
         print(f"Bulk download failed: {e}")
         return {"stocks": []}
@@ -79,81 +80,106 @@ def scan_stocks():
                 df = data.copy()
             
             df.dropna(inplace=True)
-            if len(df) < 5: continue
+            if len(df) < 50: continue # Ensure enough data for monthly calc
             
-            # Data Points
-            # Row -1: Today (Live/Latest)
-            # Row -2: Yesterday (T-1) -> Used for Today's levels
-            # Row -3: Day Before (T-2) -> Used for Yesterday's levels
-            
+            # --- Daily Data Points ---
             today = df.iloc[-1]
-            prev_day = df.iloc[-2]  # T-1
-            prev_prev = df.iloc[-3] # T-2
-            
             current_price = today['Close']
             
-            # --- 1. Calculate Indicators ---
+            # --- 1. Calculate Daily Indicators (for Doji Strategy) ---
+            # Row -2 is Yesterday (T-1) for Daily Pivots
+            prev_day_daily = df.iloc[-2]
             
-            # CPR & Camarilla for TODAY (Using T-1)
-            cpr_today = calculate_cpr_value(prev_day['High'], prev_day['Low'], prev_day['Close'])
-            cam_today = calculate_camarilla_value(prev_day['High'], prev_day['Low'], prev_day['Close'])
+            cpr_daily = calculate_cpr_value(prev_day_daily['High'], prev_day_daily['Low'], prev_day_daily['Close'])
+            cam_daily = calculate_camarilla_value(prev_day_daily['High'], prev_day_daily['Low'], prev_day_daily['Close'])
             
-            # Camarilla for YESTERDAY (Using T-2) - For Inside Cam Strategy
-            cam_yesterday = calculate_camarilla_value(prev_prev['High'], prev_prev['Low'], prev_prev['Close'])
-            
-            # EMAs
-            # Calculate on full series to be accurate
-            ema8 = ta.ema(df['Close'], length=8).iloc[-1]
-            ema20 = ta.ema(df['Close'], length=20).iloc[-1]
-            
-            # --- 2. Strategy Logic ---
+            # --- 2. Calculate Monthly Indicators (for Inside Cam Strategy) ---
+            # Resample to Monthly
+            # yfinance index is DatetimeIndex. Resample 'M' gives last day of month.
+            try:
+                df_monthly = df.resample('ME').agg({
+                    'Open': 'first',
+                    'High': 'max',
+                    'Low': 'min',
+                    'Close': 'last'
+                })
+                # If current month is incomplete, it might be included or not depending on date.
+                # We need Completed Months for "Prev Month" and "Month before Prev".
+                
+                # Check if the last row is the current incomplete month. 
+                # If today is Jan 30, 'ME' for Jan is Jan 31. It will verify as "Jan".
+                # We treat the last row as "Current Month" (even if incomplete/live).
+                # The row before that is "Last Month" (Completed).
+                # The row before that is "Month before Last" (Completed).
+                
+                if len(df_monthly) < 3: continue
+                
+                # Monthly Pivots for CURRENT Month are based on LAST Month (Row -2)
+                last_month = df_monthly.iloc[-2] # Completed
+                cam_monthly_curr = calculate_camarilla_value(last_month['High'], last_month['Low'], last_month['Close'])
+                cpr_monthly_curr = calculate_cpr_value(last_month['High'], last_month['Low'], last_month['Close'])
+
+                # Monthly Pivots for LAST Month were based on 2 MONTHS AGO (Row -3)
+                month_before_last = df_monthly.iloc[-3]
+                cam_monthly_prev = calculate_camarilla_value(month_before_last['High'], month_before_last['Low'], month_before_last['Close'])
+                
+            except Exception as e:
+                # print(f"Monthly resample failed for {ticker}: {e}")
+                continue
+
+            # --- 3. Strategy Logic ---
             strategies = []
             
-            # --- Strategy A: Doji/CPR Setup ---
-            # Criteria 1: Tight CPR
-            is_tight_cpr = cpr_today['width_pct'] < CPR_WIDTH_THRESHOLD
-            
-            # Criteria 2: Near Cam Center
-            dist_to_center = abs(current_price - cam_today['center']) / cam_today['center'] * 100
+            # --- Strategy A: Daily Doji/CPR Setup ---
+            is_tight_cpr = cpr_daily['width_pct'] < CPR_WIDTH_THRESHOLD
+            dist_to_center = abs(current_price - cam_daily['center']) / cam_daily['center'] * 100
             is_near_center = dist_to_center < 0.3
-            
-            # Criteria 3: Candlestick Pattern (Reviewing last candle)
             has_pattern, pattern_name = check_candle_pattern(today['Open'], today['High'], today['Low'], today['Close'])
+            is_above_pivot_daily = current_price >= (cpr_daily['pivot'] * 0.999)
             
-            # Criteria 4: Price Near/Above Pivot (Using CPR Pivot as reference)
-            # User: "near or above pivot"
-            is_above_pivot = current_price >= (cpr_today['pivot'] * 0.999) # 0.1% tolerance
-            
-            # Criteria 5: Short Daily Range (< 1%)
             today_range_pct = (today['High'] - today['Low']) / current_price * 100
             is_low_range = today_range_pct < 1.0
             
-            if is_tight_cpr and is_near_center and has_pattern and is_above_pivot and is_low_range:
+            if is_tight_cpr and is_near_center and has_pattern and is_above_pivot_daily and is_low_range:
                 strategies.append("Doji_Setup")
 
-            # --- Strategy B: Inside Camarilla ---
-            # "Recent camerilla should be within the previous Camerilla"
-            # Today's Range (H3-L3) inside Yesterday's Range (H3-L3)
-            # User request: "including the above criteria" -> Price >= Pivot, Range < 1%
+            # --- Strategy B: Monthly Inside Camarilla ---
+            # Condition 1: Inside Cam
+            # Current Month Range (H3-L3) inside Last Month Range
+            is_inside_cam_monthly = (cam_monthly_curr['h3'] < cam_monthly_prev['h3']) and (cam_monthly_curr['l3'] > cam_monthly_prev['l3'])
             
-            is_inside_cam = (cam_today['h3'] < cam_yesterday['h3']) and (cam_today['l3'] > cam_yesterday['l3'])
+            # Condition 2: Filters (Daily Candle props)
+            # Price >= Monthly Pivot
+            is_above_pivot_monthly = current_price >= (cpr_monthly_curr['pivot'] * 0.999)
             
-            # Applying bullish filters to Inside Cam as well
-            if is_inside_cam and is_above_pivot and is_low_range:
+            # Range < 1% (Daily range, reusable variable)
+            
+            if is_inside_cam_monthly and is_above_pivot_monthly and is_low_range:
                 strategies.append("Inside_Camarilla")
 
-            # --- 3. Add to List if any strategy matches ---
+            # --- 4. Add to List ---
             if strategies:
                 valid_stocks.append({
                     "ticker": ticker.replace(".NS", ""),
                     "price": round(current_price, 2),
-                    "cpr": cpr_today,
-                    "camarilla": cam_today,
-                    "prev_camarilla": cam_yesterday, # Useful for visualizing "Inside"
                     "strategies": strategies,
-                    "signal": ", ".join(strategies), # For simple display
                     "range_pct": round(today_range_pct, 2),
-                    "ema_status": f"EMA8: {round(ema8,1)}, EMA20: {round(ema20,1)}"
+                    
+                    # Store Daily levels for Doji tab
+                    "daily": {
+                         "cpr_width": cpr_daily['width_pct'],
+                         "cam_center": cam_daily['center'],
+                         "pivot": cpr_daily['pivot']
+                    },
+                    
+                    # Store Monthly levels for Inside Tab
+                    "monthly": {
+                        "curr_h3": cam_monthly_curr['h3'],
+                        "prev_h3": cam_monthly_prev['h3'],
+                        "curr_l3": cam_monthly_curr['l3'],
+                        "prev_l3": cam_monthly_prev['l3'],
+                        "pivot": cpr_monthly_curr['pivot']
+                    }
                 })
 
         except Exception as e:
