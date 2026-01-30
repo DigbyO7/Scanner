@@ -59,128 +59,141 @@ def scan_stocks():
     tickers = get_nifty500_tickers()
     valid_stocks = []
     
-    print(f"Downloading data for {len(tickers)} tickers...")
-    try:
-        # Need enough data for monthly resampling (at least 3-4 months)
-        data = yf.download(tickers, period="6mo", interval="1d", group_by='ticker', threads=True)
-    except Exception as e:
-        print(f"Bulk download failed: {e}")
-        return {"stocks": []}
-
-    if data is None or data.empty:
-         print("No data received.")
-         return {"stocks": []}
-
-    print("Processing data...")
+    print(f"Total tickers to scan: {len(tickers)}")
     
-    for ticker in tickers:
+    # OUTPUT Structure
+    valid_stocks = []
+    BATCH_SIZE = 50
+    
+    for i in range(0, len(tickers), BATCH_SIZE):
+        chunk = tickers[i : i + BATCH_SIZE]
+        print(f"Processing batch {i} to {i + len(chunk)}...")
+        
         try:
-            if len(tickers) > 1:
-                df = data[ticker].copy()
-            else:
-                df = data.copy()
+            # Download batch
+            data = yf.download(chunk, period="6mo", interval="1d", group_by='ticker', threads=True)
             
-            df.dropna(inplace=True)
-            if len(df) < 50: continue # Ensure enough data for monthly calc
-            
-            # --- Daily Data Points ---
-            today = df.iloc[-1]
-            current_price = today['Close']
-            
-            # --- 1. Calculate Daily Indicators (for Doji Strategy) ---
-            # Row -2 is Yesterday (T-1) for Daily Pivots
-            prev_day_daily = df.iloc[-2]
-            
-            cpr_daily = calculate_cpr_value(prev_day_daily['High'], prev_day_daily['Low'], prev_day_daily['Close'])
-            cam_daily = calculate_camarilla_value(prev_day_daily['High'], prev_day_daily['Low'], prev_day_daily['Close'])
-            
-            # --- 2. Calculate Monthly Indicators (for Inside Cam Strategy) ---
-            # Resample to Monthly
-            # yfinance index is DatetimeIndex. Resample 'ME' gives last day of month.
-            try:
-                df_monthly = df.resample('ME').agg({
-                    'Open': 'first',
-                    'High': 'max',
-                    'Low': 'min',
-                    'Close': 'last'
-                })
-                
-                if len(df_monthly) < 3: continue
-                
-                # Monthly Pivots for CURRENT Month are based on LAST Month (Row -2)
-                last_month = df_monthly.iloc[-2] # Completed
-                cam_monthly_curr = calculate_camarilla_value(last_month['High'], last_month['Low'], last_month['Close'])
-                cpr_monthly_curr = calculate_cpr_value(last_month['High'], last_month['Low'], last_month['Close'])
-
-                # Monthly Pivots for LAST Month were based on 2 MONTHS AGO (Row -3)
-                month_before_last = df_monthly.iloc[-3]
-                cam_monthly_prev = calculate_camarilla_value(month_before_last['High'], month_before_last['Low'], month_before_last['Close'])
-                
-            except Exception as e:
-                # print(f"Monthly resample failed for {ticker}: {e}")
+            if data is None or data.empty:
+                print(f"Batch {i} returned no data.")
+                # Even if empty, continue to next batch
                 continue
-
-            # --- 3. Strategy Logic ---
-            strategies = []
-            
-            # --- Strategy A: Daily Doji/CPR Setup ---
-            # --- Strategy A: Daily Doji/CPR Setup ---
-            # User Request: "scan stocks that is giving doji . thats the only criteria"
-            # Removing CPR width, Cam center, Pivot, and EMA checks.
-            
-            has_pattern, pattern_name = check_candle_pattern(today['Open'], today['High'], today['Low'], today['Close'])
-            
-            # Use existing Small Candle logic if basic pattern not found?
-            # User said "Doji/Hammer/Small" previously, now just "Doji". 
-            # I will keep the robust pattern detector (Doji+Hammer) and the "Small Candle" fallback 
-            # because "Doji" is often used loosely for "small body".
-            
-            if not has_pattern:
-                body_size = abs(today['Close'] - today['Open'])
-                range_size = today['High'] - today['Low']
-                if range_size > 0 and (body_size / range_size) < 0.3: # Body less than 30% of range
-                    has_pattern = True
-                    pattern_name = "Small Candle"
-
-            if has_pattern:
-                strategies.append("Doji_Setup")
-
-            # --- Strategy B: Monthly Inside Camarilla (Pine Script Alignment) ---
-            # Requirement: Recent month Camerilla (L3 L4 H3 H4) should be within Last month (L3 L4 H3 H4)
-            # Replaced CPR check with Strict Containment as per User Instruction referring to calculation.
-            
-            is_inside_h3l3 = (cam_monthly_curr['h3'] <= cam_monthly_prev['h3']) and (cam_monthly_curr['l3'] >= cam_monthly_prev['l3'])
-            is_inside_h4l4 = (cam_monthly_curr['h4'] <= cam_monthly_prev['h4']) and (cam_monthly_curr['l4'] >= cam_monthly_prev['l4'])
-            
-            if is_inside_h3l3 and is_inside_h4l4:
-                strategies.append("Inside_Camarilla")
-
-            # --- 4. Add to List ---
-            if strategies:
-                valid_stocks.append({
-                    "ticker": ticker.replace(".NS", ""),
-                    "price": round(current_price, 2),
-                    "strategies": strategies,
-                    "range_pct": round(today_range_pct, 2),
+                
+            # Iterate tickers in this chunk
+            for ticker in chunk:
+                try:
+                    # Handle yfinance structure differences
+                    if len(chunk) == 1:
+                        # Single ticker dataframe
+                        df = data.copy()
+                    else:
+                        # Multi-ticker dataframe
+                        if ticker not in data.columns.levels[0] if isinstance(data.columns, pd.MultiIndex) else False:
+                             # Ticker data missing in this batch
+                             continue
+                        df = data[ticker].copy()
                     
-                    # Store Daily levels for Doji tab
-                    "daily": {
-                         "cpr_width": cpr_daily['width_pct'],
-                         "cam_center": cam_daily['center'],
-                         "pivot": cpr_daily['pivot']
-                    },
+                    if df.empty: continue
                     
-                    # Store Monthly levels for Inside Tab
-                    "monthly": {
-                        "curr_h3": cam_monthly_curr['h3'],
-                        "prev_h3": cam_monthly_prev['h3'],
-                        "curr_l3": cam_monthly_curr['l3'],
-                        "prev_l3": cam_monthly_prev['l3'],
-                        "pivot": cpr_monthly_curr['pivot']
-                    }
-                })
+                    df.dropna(inplace=True)
+                    if len(df) < 50: continue # Ensure enough data for monthly calc
+                    
+                    # --- Daily Data Points ---
+                    today = df.iloc[-1]
+                    current_price = today['Close']
+                    
+                    # --- 1. Calculate Daily Indicators (for Doji Strategy) ---
+                    # Row -2 is Yesterday (T-1) for Daily Pivots
+                    prev_day_daily = df.iloc[-2]
+                    
+                    cpr_daily = calculate_cpr_value(prev_day_daily['High'], prev_day_daily['Low'], prev_day_daily['Close'])
+                    cam_daily = calculate_camarilla_value(prev_day_daily['High'], prev_day_daily['Low'], prev_day_daily['Close'])
+                    
+                    # --- 2. Calculate Monthly Indicators (for Inside Cam Strategy) ---
+                    # Resample to Monthly
+                    # yfinance index is DatetimeIndex. Resample 'ME' gives last day of month.
+                    try:
+                        df_monthly = df.resample('ME').agg({
+                            'Open': 'first',
+                            'High': 'max',
+                            'Low': 'min',
+                            'Close': 'last'
+                        })
+                        
+                        if len(df_monthly) < 3: continue
+                        
+                        # Monthly Pivots for CURRENT Month are based on LAST Month (Row -2)
+                        last_month = df_monthly.iloc[-2] # Completed
+                        cam_monthly_curr = calculate_camarilla_value(last_month['High'], last_month['Low'], last_month['Close'])
+                        cpr_monthly_curr = calculate_cpr_value(last_month['High'], last_month['Low'], last_month['Close'])
 
+                        # Monthly Pivots for LAST Month were based on 2 MONTHS AGO (Row -3)
+                        month_before_last = df_monthly.iloc[-3]
+                        cam_monthly_prev = calculate_camarilla_value(month_before_last['High'], month_before_last['Low'], month_before_last['Close'])
+                        
+                    except Exception as e:
+                        # print(f"Monthly resample failed for {ticker}: {e}")
+                        continue
+
+                    # --- 3. Strategy Logic ---
+                    strategies = []
+                    today_range_pct = abs(today['High'] - today['Low']) / current_price * 100
+                    
+                    # --- Strategy A: Daily Doji Logic (Pattern Only) ---
+                    # User Request: "scan stocks that is giving doji . thats the only criteria"
+                    # Removing CPR width, Cam center, Pivot, and EMA checks.
+                    
+                    has_pattern, pattern_name = check_candle_pattern(today['Open'], today['High'], today['Low'], today['Close'])
+                    
+                    # Use existing Small Candle logic if basic pattern not found
+                    if not has_pattern:
+                        body_size = abs(today['Close'] - today['Open'])
+                        range_size = today['High'] - today['Low']
+                        if range_size > 0 and (body_size / range_size) < 0.3: # Body less than 30% of range
+                            has_pattern = True
+                            pattern_name = "Small Candle"
+
+                    if has_pattern:
+                        strategies.append("Doji_Setup")
+
+                    # --- Strategy B: Monthly Inside Camarilla (Pine Script Alignment) ---
+                    # Requirement: Recent month Camerilla (L3 L4 H3 H4) should be within Last month (L3 L4 H3 H4)
+                    
+                    is_inside_h3l3 = (cam_monthly_curr['h3'] <= cam_monthly_prev['h3']) and (cam_monthly_curr['l3'] >= cam_monthly_prev['l3'])
+                    is_inside_h4l4 = (cam_monthly_curr['h4'] <= cam_monthly_prev['h4']) and (cam_monthly_curr['l4'] >= cam_monthly_prev['l4'])
+                    
+                    if is_inside_h3l3 and is_inside_h4l4:
+                        strategies.append("Inside_Camarilla")
+
+                    # --- 4. Add to List ---
+                    if strategies:
+                        valid_stocks.append({
+                            "ticker": ticker.replace(".NS", ""),
+                            "price": round(current_price, 2),
+                            "strategies": strategies,
+                            "range_pct": round(today_range_pct, 2),
+                            
+                            # Store Daily levels for Doji tab
+                            "daily": {
+                                 "cpr_width": cpr_daily['width_pct'],
+                                 "cam_center": cam_daily['center'],
+                                 "pivot": cpr_daily['pivot']
+                            },
+                            
+                            # Store Monthly levels for Inside Tab
+                            "monthly": {
+                                "curr_h3": cam_monthly_curr['h3'],
+                                "prev_h3": cam_monthly_prev['h3'],
+                                "curr_l3": cam_monthly_curr['l3'],
+                                "prev_l3": cam_monthly_prev['l3'],
+                                "pivot": cpr_monthly_curr['pivot']
+                            }
+                        })
+                except Exception as e:
+                    # print(f"Error processing {ticker}: {e}")
+                    continue
+                    
         except Exception as e:
+            print(f"Batch download failed for chunk starting {i}: {e}")
             continue
             
     # Output
