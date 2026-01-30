@@ -45,13 +45,15 @@ if st.session_state.scan_data:
         # Prepare DataFrame for display
         display_data = []
         for s in stocks:
+            tv_url = f"https://in.tradingview.com/chart/?symbol=NSE:{s['ticker']}"
             display_data.append({
                 "Ticker": s['ticker'],
                 "Price": s['price'],
                 "Signal": s['signal'],
                 "CPR Width %": s['cpr']['width_pct'],
                 "Cam Center": s['camarilla']['center'],
-                "EMA Status": s['ema_status']
+                "EMA Status": s['ema_status'],
+                "Chart": tv_url
             })
         
         df = pd.DataFrame(display_data)
@@ -67,6 +69,7 @@ if st.session_state.scan_data:
                 "Price": st.column_config.NumberColumn(format="₹%.2f"),
                 "CPR Width %": st.column_config.NumberColumn(format="%.2f%%"),
                 "Cam Center": st.column_config.NumberColumn(format="₹%.2f"),
+                "Chart": st.column_config.LinkColumn("TradingView", display_text="Open Chart"),
             },
             use_container_width=True,
             hide_index=True
