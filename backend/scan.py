@@ -157,21 +157,26 @@ def scan_stocks():
             if is_tight_cpr and is_near_center and has_pattern and is_above_pivot_daily and is_near_ema:
                 strategies.append("Doji_Setup")
 
-            # --- Strategy B: Monthly Inside Camarilla ---
-            # Condition 1: Inside Cam Strict
-            # "Recent month h4 h3 and l3 l4 should be within the range of previous month h4 h3 and l3 l4"
-            # Logic: (Curr H4 < Prev H4) AND (Curr H3 < Prev H3) AND (Curr L3 > Prev L3) AND (Curr L4 > Prev L4)
+            # --- Strategy B: Monthly Inside Camarilla (Chartink Logic) ---
+            # Logic from screenshot:
+            # 1. H3/L3 Comparison:
+            #    (2 months ago data -> Prev Month Pivots) outer range
+            #    (1 month ago data -> Curr Month Pivots) inner range
+            #    Curr H3 <= Prev H3  AND  Curr L3 >= Prev L3
             
-            is_inside_h3l3 = (cam_monthly_curr['h3'] < cam_monthly_prev['h3']) and (cam_monthly_curr['l3'] > cam_monthly_prev['l3'])
-            is_inside_h4l4 = (cam_monthly_curr['h4'] < cam_monthly_prev['h4']) and (cam_monthly_curr['l4'] > cam_monthly_prev['l4'])
+            is_inside_h3l3 = (cam_monthly_curr['h3'] <= cam_monthly_prev['h3']) and (cam_monthly_curr['l3'] >= cam_monthly_prev['l3'])
             
-            is_inside_strict = is_inside_h3l3 and is_inside_h4l4
-             
-            # Condition 2: Filters (Daily Candle props)
-            # Price >= Monthly Pivot
-            is_above_pivot_monthly = current_price >= (cpr_monthly_curr['pivot'] * 0.999)
+            # 2. Narrow CPR Check
+            # Screenshot: Abs(TC - BC) < (Close * 0.002)
+            # which matches our cpr['width_pct'] < 0.2
+            is_narrow_cpr_monthly = cpr_monthly_curr['width_pct'] < 0.2
             
-            if is_inside_strict and is_above_pivot_monthly and is_low_range:
+            # User asked to "follow logic from screenshot".
+            # The screenshot shows H3/L3 comparison and CPR Width Check.
+            # It does NOT explicitly show Price > Pivot or Daily Range < 1% filters in the visible conditional blocks.
+            # I will remove the extra daily filters for THIS strategy to be strict.
+            
+            if is_inside_h3l3 and is_narrow_cpr_monthly:
                 strategies.append("Inside_Camarilla")
 
             # --- 4. Add to List ---
