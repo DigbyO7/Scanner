@@ -163,8 +163,8 @@ def scan_stocks():
                     is_near_cpr = dist_to_cpr < 0.5
                     is_near_cam = dist_to_cam < 0.5
                     
-                    # 3. Low Range Check (Tightened for "Short Wicks")
-                    is_low_range = today_range_pct < 0.75 
+                    # 3. Low Range Check (Relaxed to 1.5% max)
+                    is_low_range = today_range_pct < 1.5 
 
                     if has_pattern and is_near_cpr and is_near_cam and is_low_range:
                         strategies.append("Doji_Setup")
