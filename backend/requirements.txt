@@ -5,3 +5,4 @@ numpy
 requests
 streamlit
 lxml
+altair<5
