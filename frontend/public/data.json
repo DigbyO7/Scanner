@@ -1,0 +1,39 @@
+{
+    "last_updated": "2024-05-20 18:00:00",
+    "stocks": [
+        {
+            "ticker": "RELIANCE",
+            "price": 2850.50,
+            "cpr": {
+                "pivot": 2840.0,
+                "width_pct": 0.15,
+                "bc": 2838.0,
+                "tc": 2842.0
+            },
+            "camarilla": {
+                "center": 2845.0,
+                "h3": 2855.0,
+                "l3": 2835.0
+            },
+            "signal": "Doji at Cam Center",
+            "ema_status": "Near EMA20"
+        },
+        {
+            "ticker": "INFY",
+            "price": 1420.00,
+            "cpr": {
+                "pivot": 1415.0,
+                "width_pct": 0.25,
+                "bc": 1412.0,
+                "tc": 1418.0
+            },
+            "camarilla": {
+                "center": 1418.0,
+                "h3": 1425.0,
+                "l3": 1410.0
+            },
+            "signal": "Hammer at Support",
+            "ema_status": "Above EMA8"
+        }
+    ]
+}
