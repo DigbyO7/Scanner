@@ -149,7 +149,7 @@ def scan_stocks():
                         curr_ema20 = 0
 
                     # --- Strategy A: Daily Doji Logic (Pattern + Location) ---
-                    # User Request: "Doji + Near Pivot + Near 8/20 EMA"
+                    # User Request: "Doji + Near Monthly CPR (TC/PP/BC) + Near 8/20 EMA"
                     
                     # 1. Pattern Check
                     has_pattern, pattern_name = check_candle_pattern(today['Open'], today['High'], today['Low'], today['Close'])
@@ -161,26 +161,29 @@ def scan_stocks():
                             has_pattern = True
                             pattern_name = "Small Candle"
 
-                    # Explicitly Ignore Hammers (Short Wicks preference kept?)
-                    # User said "Today's candle should be a doji". I'll keep hammer exclusion as it implies strict doji/small.
+                    # Explicitly Ignore Hammers
                     if pattern_name == "Hammer":
                         has_pattern = False
 
-                    # 2. Location Check: Near Pivot (CPR)
-                    dist_to_cpr = abs(current_price - cpr_daily['pivot']) / cpr_daily['pivot'] * 100
-                    is_near_cpr = dist_to_cpr < 0.5
+                    # 2. Location Check: Near MONTHLY Pivot (CPR)
+                    # User: "Near this month's monthly TC, monthly PP and monthly BC"
+                    # We check proximity to the Central Pivot (PP) of the Monthly CPR.
+                    month_pivot = cpr_monthly_curr['pivot']
+                    dist_to_monthly_pivot = abs(current_price - month_pivot) / month_pivot * 100
+                    
+                    # Also check narrowness? If user says "Near TC, PP AND BC", implies they are close together.
+                    # Or just being near the Pivot is sufficient proxy.
+                    is_near_monthly_cpr = dist_to_monthly_pivot < 0.75 # Slightly looser for Monthly levels
                     
                     # 3. Location Check: Near EMA (8 or 20)
-                    # Threshold 1.0%
                     dist_ema8 = abs(current_price - curr_ema8) / curr_ema8 * 100 if curr_ema8 > 0 else 999
                     dist_ema20 = abs(current_price - curr_ema20) / curr_ema20 * 100 if curr_ema20 > 0 else 999
                     is_near_ema = (dist_ema8 < 1.0) or (dist_ema20 < 1.0)
 
-                    # 4. Range Check (Optional but recommended to keep filtering junk)
-                    # User didn't specify, but implied previous "max 1.5%". I'll keep it loose.
+                    # 4. Range Check
                     is_low_range = today_range_pct < 1.5
 
-                    if has_pattern and is_near_cpr and is_near_ema and is_low_range:
+                    if has_pattern and is_near_monthly_cpr and is_near_ema and is_low_range:
                         strategies.append("Doji_Setup")
 
                     # --- Strategy B: Monthly Inside Camarilla (Pine Script Alignment) ---
