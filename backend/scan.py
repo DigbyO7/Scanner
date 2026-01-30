@@ -181,7 +181,7 @@ def scan_stocks():
                     
                     for level in levels_to_check:
                          dist = abs(current_price - level) / level * 100
-                         if dist < 0.75: # Close to any of the 3 levels
+                         if dist < 4.0: # User requested 4% tolerance
                              is_near_monthly_cpr = True
                              break
                     
