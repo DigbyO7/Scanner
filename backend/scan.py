@@ -137,10 +137,24 @@ def scan_stocks():
             has_pattern, pattern_name = check_candle_pattern(today['Open'], today['High'], today['Low'], today['Close'])
             is_above_pivot_daily = current_price >= (cpr_daily['pivot'] * 0.999)
             
-            today_range_pct = (today['High'] - today['Low']) / current_price * 100
-            is_low_range = today_range_pct < 1.0
+            # EMA Proximity Check
+            # Calculate distance % from 8 and 20 EMA
+            dist_ema8 = abs(current_price - ema8) / ema8 * 100
+            dist_ema20 = abs(current_price - ema20) / ema20 * 100
             
-            if is_tight_cpr and is_near_center and has_pattern and is_above_pivot_daily and is_low_range:
+            # Condition: Near 8 EMA OR Near 20 EMA (within 1.5%)
+            is_near_ema = (dist_ema8 < 1.5) or (dist_ema20 < 1.5)
+            
+            # User said "range for now doesnt matter", so removing is_low_range from Doji strategy
+            # Also checking for "Small Candle" if not Doji/Hammer
+            if not has_pattern:
+                body_size = abs(today['Close'] - today['Open'])
+                range_size = today['High'] - today['Low']
+                if range_size > 0 and (body_size / range_size) < 0.3: # Body less than 30% of range
+                    has_pattern = True
+                    pattern_name = "Small Candle"
+
+            if is_tight_cpr and is_near_center and has_pattern and is_above_pivot_daily and is_near_ema:
                 strategies.append("Doji_Setup")
 
             # --- Strategy B: Monthly Inside Camarilla ---
@@ -152,7 +166,12 @@ def scan_stocks():
             # Price >= Monthly Pivot
             is_above_pivot_monthly = current_price >= (cpr_monthly_curr['pivot'] * 0.999)
             
-            # Range < 1% (Daily range, reusable variable)
+            # Range < 1% (Daily range) - Keeping this for Inside Cam unless user meant for both?
+            # User instruction "For Doji/CPR scanner... range doesn't matter".
+            # For Inside Cam, they previously asked for "above criteria (including range)".
+            # I will keep range filter for Inside Cam to be safe/conservative, or remove if results are too low.
+            today_range_pct = (today['High'] - today['Low']) / current_price * 100
+            is_low_range = today_range_pct < 1.0
             
             if is_inside_cam_monthly and is_above_pivot_monthly and is_low_range:
                 strategies.append("Inside_Camarilla")
