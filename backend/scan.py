@@ -60,6 +60,7 @@ def scan_stocks():
     valid_stocks = []
     
     print(f"Total tickers to scan: {len(tickers)}")
+    print("NOTE: Ensuring data is up to date...")
     
     # OUTPUT Structure
     valid_stocks = []
@@ -100,6 +101,9 @@ def scan_stocks():
                     # --- Daily Data Points ---
                     today = df.iloc[-1]
                     current_price = today['Close']
+                    
+                    if i == 0 and len(valid_stocks) == 0:
+                         print(f"DEBUG: Latest data date for {ticker} is {today.name}")
                     
                     # --- 1. Calculate Daily Indicators (for Doji Strategy) ---
                     # Row -2 is Yesterday (T-1) for Daily Pivots
@@ -165,15 +169,21 @@ def scan_stocks():
                     if pattern_name == "Hammer":
                         has_pattern = False
 
-                    # 2. Location Check: Near MONTHLY Pivot (CPR)
+                    # 2. Location Check: Near MONTHLY Pivot (TC, PP, or BC)
                     # User: "Near this month's monthly TC, monthly PP and monthly BC"
-                    # We check proximity to the Central Pivot (PP) of the Monthly CPR.
-                    month_pivot = cpr_monthly_curr['pivot']
-                    dist_to_monthly_pivot = abs(current_price - month_pivot) / month_pivot * 100
+                    # We check proximity to ANY of the three levels (Range concept).
+                    month_pp = cpr_monthly_curr['pivot']
+                    month_tc = cpr_monthly_curr['tc']
+                    month_bc = cpr_monthly_curr['bc']
                     
-                    # Also check narrowness? If user says "Near TC, PP AND BC", implies they are close together.
-                    # Or just being near the Pivot is sufficient proxy.
-                    is_near_monthly_cpr = dist_to_monthly_pivot < 0.75 # Slightly looser for Monthly levels
+                    levels_to_check = [month_pp, month_tc, month_bc]
+                    is_near_monthly_cpr = False
+                    
+                    for level in levels_to_check:
+                         dist = abs(current_price - level) / level * 100
+                         if dist < 0.75: # Close to any of the 3 levels
+                             is_near_monthly_cpr = True
+                             break
                     
                     # 3. Location Check: Near EMA (8 or 20)
                     dist_ema8 = abs(current_price - curr_ema8) / curr_ema8 * 100 if curr_ema8 > 0 else 999
