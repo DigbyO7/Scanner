@@ -158,22 +158,20 @@ def scan_stocks():
                 strategies.append("Doji_Setup")
 
             # --- Strategy B: Monthly Inside Camarilla ---
-            # Condition 1: Inside Cam
-            # Current Month Range (H3-L3) inside Last Month Range
-            is_inside_cam_monthly = (cam_monthly_curr['h3'] < cam_monthly_prev['h3']) and (cam_monthly_curr['l3'] > cam_monthly_prev['l3'])
+            # Condition 1: Inside Cam Strict
+            # "Recent month h4 h3 and l3 l4 should be within the range of previous month h4 h3 and l3 l4"
+            # Logic: (Curr H4 < Prev H4) AND (Curr H3 < Prev H3) AND (Curr L3 > Prev L3) AND (Curr L4 > Prev L4)
             
+            is_inside_h3l3 = (cam_monthly_curr['h3'] < cam_monthly_prev['h3']) and (cam_monthly_curr['l3'] > cam_monthly_prev['l3'])
+            is_inside_h4l4 = (cam_monthly_curr['h4'] < cam_monthly_prev['h4']) and (cam_monthly_curr['l4'] > cam_monthly_prev['l4'])
+            
+            is_inside_strict = is_inside_h3l3 and is_inside_h4l4
+             
             # Condition 2: Filters (Daily Candle props)
             # Price >= Monthly Pivot
             is_above_pivot_monthly = current_price >= (cpr_monthly_curr['pivot'] * 0.999)
             
-            # Range < 1% (Daily range) - Keeping this for Inside Cam unless user meant for both?
-            # User instruction "For Doji/CPR scanner... range doesn't matter".
-            # For Inside Cam, they previously asked for "above criteria (including range)".
-            # I will keep range filter for Inside Cam to be safe/conservative, or remove if results are too low.
-            today_range_pct = (today['High'] - today['Low']) / current_price * 100
-            is_low_range = today_range_pct < 1.0
-            
-            if is_inside_cam_monthly and is_above_pivot_monthly and is_low_range:
+            if is_inside_strict and is_above_pivot_monthly and is_low_range:
                 strategies.append("Inside_Camarilla")
 
             # --- 4. Add to List ---

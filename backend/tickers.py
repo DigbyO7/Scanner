@@ -4,16 +4,16 @@ import io
 
 def get_nifty500_tickers():
     """
-    Fetches the Nifty Total Market stock list from NSE archives or fallback to Nifty 500.
+    Fetches the Nifty 500 stock list from NSE archives or similar source.
     Returns a list of tickers with '.NS' suffix for yfinance.
     """
-    url = "https://nsearchives.nseindia.com/content/indices/ind_niftytotalmarket_list.csv"
+    url = "https://nsearchives.nseindia.com/content/indices/ind_nifty500list.csv"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
     
     try:
-        print(f"Fetching Nifty Total Market list from {url}...")
+        print(f"Fetching Nifty 500 list from {url}...")
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         
